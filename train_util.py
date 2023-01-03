@@ -343,6 +343,7 @@ class TrainLoop:
 
     def save(self):
         def save_checkpoint(rate, params):
+            print('\n\n', self.checkpoint_path, '\n\n')
             state_dict = self._master_params_to_state_dict(params)
             if dist.get_rank() == 0:
                 logger.log(f"saving model {rate}...")
@@ -350,16 +351,11 @@ class TrainLoop:
                     filename = f"model{(self.step+self.resume_step):06d}.pt"
                 else:
                     filename = f"ema_{rate}_{(self.step+self.resume_step):06d}.pt"
-                print('writing to', bf.join(get_blob_logdir(), filename))
                 print('writing to', bf.join(self.checkpoint_path, filename))
                 # with bf.BlobFile(bf.join(get_blob_logdir(), filename), "wb") as f:
                 #     th.save(state_dict, f)
-                with bf.BlobFile(bf.join(self.checkpoint_path, filename), "wb") as f: # DEBUG **
-                    print('\n\n\n')
-                    print(f)
-                    sys.exit()
-                    th.save(state_dict, f) # save locally
-                    # pass # save empty
+                path = os.path.join(self.checkpoint_path, filename)
+                th.save(state_dict, path) # save locally
 
         # save_checkpoint(0, self.master_params)
         for rate, params in zip(self.ema_rate, self.ema_params):
