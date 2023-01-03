@@ -4,9 +4,18 @@ import argparse
 import time
 sys.path.append('.')
 
-if __name__ == '__main__':
+# check if args.name has been used
+def ckpth(f, path):
+    # path = f_006 for example
+    print(f, path)
+    if f in path: print('path')
+    print(len(path), len(f))
+    print()
+    return f in path and len(path) == len(f) + 4 
 
+if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='training args.')
+    parser.add_argument('--name', type=str, default='dev', help='name of experiment folder')
     parser.add_argument('--dataset', type=str, default='', help='name of training dataset')
     parser.add_argument('--data_dir', type=str, default='', help='path to training dataset')
 
@@ -45,22 +54,21 @@ if __name__ == '__main__':
         if not os.path.isdir(args.folder_name):
             os.mkdir(args.folder_name)
 
-    Model_FILE = f"diffuseq_{args.dataset}_h{args.hidden_dim}_lr{args.lr}" \
-                f"_t{args.diff_steps}_{args.noise_schedule}_{args.schedule_sampler}" \
-                f"_seed{args.seed}"
-    if args.notes:
-        args.notes += time.strftime("%Y%m%d-%H:%M:%S")
-        Model_FILE = Model_FILE + f'_{args.notes}'
-    Model_FILE = os.path.join(args.folder_name, Model_FILE)
+    # check if experiment has ran already
+    if os.path.exists(os.path.join(args.folder_name, args.name + '_000')):
+        exps = [e for e in os.listdir(args.folder_name) if ckpth(args.name, e)]
+        n = len(exps)
+    else: n = 0
+    args.name = os.path.join(args.folder_name, args.name + '_' + str(n).zfill(3))
 
     if int(os.environ['LOCAL_RANK']) == 0:
-        if not os.path.isdir(Model_FILE):
-            os.mkdir(Model_FILE)
+        if not os.path.isdir(args.name):
+            os.mkdir(args.name)
 
-    COMMANDLINE = f" OPENAI_LOGDIR={Model_FILE}  " \
+    COMMANDLINE = f" OPENAI_LOGDIR={args.name}  " \
                   f"TOKENIZERS_PARALLELISM=false " \
                   f"python train.py   " \
-                  f"--checkpoint_path {Model_FILE} " \
+                  f"--checkpoint_path {args.name} " \
                   f"--dataset {args.dataset} --data_dir {args.data_dir} --vocab {args.vocab} --use_plm_init {args.use_plm_init} " \
                   f"--lr {args.lr} " \
                   f"--batch_size {args.bsz} --microbatch {args.microbatch} " \
@@ -75,7 +83,7 @@ if __name__ == '__main__':
     COMMANDLINE += " " + args.app
 
     if int(os.environ['LOCAL_RANK']) == 0:
-        with open(os.path.join(Model_FILE, 'saved_bash.sh'), 'w') as f:
+        with open(os.path.join(args.name, 'saved_bash.sh'), 'w') as f:
             print(COMMANDLINE, file=f)
 
     print(COMMANDLINE)
