@@ -1,12 +1,9 @@
-"""
-Generate a large batch of image samples from a model and save them as a large
-numpy array. This can be used to produce samples for FID evaluation.
-"""
-
 import argparse
+from tqdm import tqdm
 import os, json
 from tracemalloc import start
 
+import sys
 import numpy as np
 import torch as th
 import torch.distributed as dist
@@ -113,14 +110,11 @@ def main():
             batch, cond = next(data_valid)
             # print(batch.shape)
             all_test_data.append(cond)
-
     except StopIteration:
         print('### End of reading iteration...')
     
-    from tqdm import tqdm
-
+    # make sample loop
     for cond in tqdm(all_test_data):
-
         input_ids_x = cond.pop('input_ids').to(dist_util.dev())
         x_start = model.get_embeds(input_ids_x)
         input_ids_mask = cond.pop('input_mask')

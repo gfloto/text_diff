@@ -1,5 +1,4 @@
-import argparse
-import json, torch, os
+import argparse, json, torch, os, sys
 import numpy as np
 from diffuseq.utils import dist_util, logger
 from diffuseq.text_datasets import load_data_text
@@ -29,6 +28,8 @@ def create_argparser():
 def main():
     args = create_argparser().parse_args()
 
+    # setting seed is cursed, I muse talk to giga coder to explain this madness
+    # (even worse than batch-norm)
     set_seed(args.seed) 
     dist_util.setup_dist()
     logger.configure()
@@ -45,6 +46,14 @@ def main():
         model_emb=model_weight # use model's weights as init
     )
     next(data)
+
+    # list of 1) data tensor of : bzn, seq_len, token size
+    # 2) dict of "input_ids" and "input_mask" (bzn, token size)
+    # input mask seems like a odd trade-off from compute and memory
+    #for _ in range(5):
+        #out = next(data)
+        #print(out[1]['input_ids'][0])
+        #print(out[1]['input_mask'][0])
 
     data_valid = load_data_text(
         batch_size=args.batch_size,
@@ -63,10 +72,8 @@ def main():
     model, diffusion = create_model_and_diffusion(
         **args_to_dict(args, load_defaults_config().keys())
     )
-    # print('#'*30, 'cuda', dist_util.dev())
-    model.to(dist_util.dev()) #  DEBUG **
-    # model.cuda() #  DEBUG **
 
+    model.to(dist_util.dev()) #  DEBUG **
     pytorch_total_params = sum(p.numel() for p in model.parameters())
 
     logger.log(f'### The parameter count is {pytorch_total_params}')

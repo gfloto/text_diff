@@ -2,9 +2,7 @@
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 
-import torch
-import json
-import psutil
+import torch, json, psutil, sys
 import datasets
 from datasets import Dataset as Dataset2
 
@@ -91,9 +89,11 @@ def helper_tokenize(sentence_lst, vocab_dict, seq_len):
         lst = []
         mask = []
         for i in range(len(group_lst['input_id_x'])):
+            # [CLS], ... ,[SEP]
             end_token = group_lst['input_id_x'][i][-1]
             src = group_lst['input_id_x'][i][:-1]
             trg = group_lst['input_id_y'][i][:-1]
+
             while len(src) + len(trg) > seq_len - 3:
                 if len(src)>len(trg):
                     src.pop()
@@ -104,9 +104,11 @@ def helper_tokenize(sentence_lst, vocab_dict, seq_len):
                     trg.pop()
             src.append(end_token)
             trg.append(end_token)
-
+        
             lst.append(src + [vocab_dict.sep_token_id] + trg)
             mask.append([0]*(len(src)+1))
+        
+        # TODO: concern! there are two sep tokens used here??
         group_lst['input_ids'] = lst
         group_lst['input_mask'] = mask
         return group_lst
@@ -166,6 +168,7 @@ def get_corpus(data_args, seq_len, split='train', loaded_vocab=None):
             sentence_lst['trg'].append(json.loads(row)['trg'].strip())
 
     print('### Data samples...\n', sentence_lst['src'][:2], sentence_lst['trg'][:2])
+    # sentence_lst: dict with src and tgt mapping to list of corresponding strings
         
     # get tokenizer.
     vocab_dict = loaded_vocab
