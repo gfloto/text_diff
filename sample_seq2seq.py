@@ -10,7 +10,6 @@ import torch.distributed as dist
 from transformers import set_seed
 from diffuseq.rounding import denoised_fn_round, get_weights
 from diffuseq.text_datasets import load_data_text
-
 # from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
 import time
@@ -55,6 +54,7 @@ def main():
         **args_to_dict(args, load_defaults_config().keys())
     )
 
+    # TODO: port this to train.py
     model.load_state_dict(
         dist_util.load_state_dict(args.model_path, map_location="cpu")
     )
@@ -125,7 +125,6 @@ def main():
         x_noised = th.where(input_ids_mask==0, x_start, noise)
 
         model_kwargs = {}
-
         if args.step == args.diffusion_steps:
             args.use_ddim = False
             step_gap = 1

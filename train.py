@@ -65,6 +65,9 @@ def main():
         model_emb=model_weight # using the same embedding wight with tranining data
     )
 
+    # TODO: this is hard coded in... make more general
+    pad_emb = model_weight(torch.tensor(0).long()).to(dist_util.dev())
+
     print('#'*30, 'size of vocab', args.vocab_size)
 
     logger.log("### Creating model and diffusion...")
@@ -111,7 +114,8 @@ def main():
         checkpoint_path=args.checkpoint_path,
         gradient_clipping=args.gradient_clipping,
         eval_data=data_valid,
-        eval_interval=args.eval_interval
+        eval_interval=args.eval_interval,
+        pad_emb=pad_emb
     ).run_loop()
 
 if __name__ == "__main__":

@@ -1,10 +1,3 @@
-"""
-This code started out as a PyTorch port of Ho et al's diffusion models:
-https://github.com/hojonathanho/diffusion/blob/1e0dceb3b3495bbe19116a5e1b3596cd0706c543/diffusion_tf/diffusion_utils_2.py
-
-Docstrings have been added, as well as DDIM sampling and a new collection of beta schedules.
-"""
-
 import enum
 import math
 
@@ -244,7 +237,7 @@ class GaussianDiffusion:
         """
         if noise is None:
             noise = th.randn_like(x_start)
-
+        
         assert noise.shape == x_start.shape
         x_t = (
             _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
@@ -387,6 +380,7 @@ class GaussianDiffusion:
                 replace_mask = th.abs(noise) > top_p
             assert (th.abs(noise) <= top_p).all()
 
+        # this is default
         else:
             noise = th.randn_like(x)
 
@@ -406,7 +400,7 @@ class GaussianDiffusion:
             "out": out
         }
 
-    
+
     def p_sample_loop(
         self,
         model,
@@ -509,7 +503,8 @@ class GaussianDiffusion:
                 else:
                     denoised_fn_cur = denoised_fn
             else:
-                if i >= clamp_step:
+                # this is default
+                if i >= clamp_step:  # clap step is zero
                     denoised_fn_cur = denoised_fn
                 else:
                     denoised_fn_cur = None
@@ -598,21 +593,19 @@ class GaussianDiffusion:
         input_ids_x = model_kwargs.pop('input_ids').to(t.device)
         input_ids_mask = model_kwargs.pop('input_mask').to(t.device)
         x_start_mean = model.model.module.get_embeds(input_ids_x)
-        
+
         std = _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod,
                                    th.tensor([0]).to(x_start_mean.device),
                                    x_start_mean.shape)
+
         # print(std.shape, )
         # x_start_log_var = 2 * th.log(std)
         x_start = self._get_x_start(x_start_mean, std)
-        # print(x_start_mean.shape, x_start.shape)
         if noise is None:
             noise = th.randn_like(x_start)
 
         x_t = self.q_sample(x_start, t, noise=noise, mask=input_ids_mask) # reparametrization trick.
-
         get_logits = model.model.module.get_logits
-
         terms = {}
 
         target = x_start_mean

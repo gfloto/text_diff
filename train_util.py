@@ -27,7 +27,6 @@ from diffuseq.step_sample import LossAwareSampler, UniformSampler
 # 20-21 within the first ~1K steps of training.
 INITIAL_LOG_LOSS_SCALE = 20.0
 
-
 class TrainLoop:
     def __init__(
         self,
@@ -51,6 +50,8 @@ class TrainLoop:
         gradient_clipping=-1.,
         eval_data=None,
         eval_interval=-1,
+        pad_emb=None,
+        cf_ratio=0.15
     ):
         self.model = model
         self.diffusion = diffusion
@@ -78,6 +79,8 @@ class TrainLoop:
         self.step = 0
         self.resume_step = 0
         self.global_batch = self.batch_size * dist.get_world_size()
+        self.pad_emb = pad_emb
+        self.cf_ratio = cf_ratio
 
         self.model_params = list(self.model.parameters())
         self.master_params = self.model_params
@@ -91,6 +94,8 @@ class TrainLoop:
             self._setup_fp16()
 
         self.opt = AdamW(self.master_params, lr=self.lr, weight_decay=self.weight_decay)
+
+        # TODO: how is the ever triggered?
         if self.resume_step:
             # self._load_optimizer_state()
             frac_done = (self.step + self.resume_step) / self.learning_steps
@@ -176,7 +181,20 @@ class TrainLoop:
             or self.step + self.resume_step < self.learning_steps
         ):
             batch, cond = next(self.data)
+
+            # unconditional training
+            # batch is data, cond is: dict, keys = [inputs ids, input mask]
+            if np.random.rand() < self.cf_ratio:
+                # reshape
+                emb = self.pad_emb.view(1,1,-1).expand(batch.shape).to(dist_util.dev())
+                cnd = cond['input_mask'].unsqueeze(dim=-1).expand(batch.shape).to(dist_util.dev())
+                batch = batch.to(dist_util.dev())
+
+                batch = th.where(cnd == 0, batch, emb)
+
             self.run_step(batch, cond)
+
+            # saving and eval-type operations
             if self.step % self.log_interval == 0:
                 logger.dumpkvs()
             if self.eval_data is not None and self.step % self.eval_interval == 0:
@@ -232,7 +250,6 @@ class TrainLoop:
                     self.diffusion, t, {f"eval_{k}": v * weights for k, v in losses.items()}
                 )
 
-
     def forward_backward(self, batch, cond):
         zero_grad(self.model_params)
         for i in range(0, batch.shape[0], self.microbatch):
@@ -243,6 +260,7 @@ class TrainLoop:
             }
             last_batch = (i + self.microbatch) >= batch.shape[0]
             t, weights = self.schedule_sampler.sample(micro.shape[0], dist_util.dev())
+
             # print(micro_cond.keys())
             compute_losses = functools.partial(
                 self.diffusion.training_losses,
