@@ -322,6 +322,7 @@ class GaussianDiffusion:
             return x
 
         if self.predict_xstart:
+            # default is here
             pred_xstart = process_xstart(model_output)
         else:
             ### model is used to predict eps
@@ -329,6 +330,7 @@ class GaussianDiffusion:
                 self._predict_xstart_from_eps(x_t=x, t=t, eps=model_output)
             )
 
+        # this seems very odd to me...
         model_mean, _, _ = self.q_posterior_mean_variance(
             x_start=pred_xstart, x_t=x, t=t
         )
@@ -363,6 +365,7 @@ class GaussianDiffusion:
                  - 'sample': a random sample from the model.
                  - 'pred_xstart': a prediction of x_0.
         """
+        # predict conditional output
         out = self.p_mean_variance(
             model,
             x,
@@ -371,6 +374,9 @@ class GaussianDiffusion:
             denoised_fn=denoised_fn,
             model_kwargs=model_kwargs,
         )
+
+        # classifier free output
+
         if top_p is not None and top_p > 0:
             # print('top_p sampling')
             noise = th.randn_like(x)
@@ -387,11 +393,12 @@ class GaussianDiffusion:
         nonzero_mask = (
             (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
         )  # no noise when t == 0
+
         sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
-        if mask == None:
-            pass
-        else:
-            sample = th.where(mask==0, x_start, sample)
+
+        # re-condition
+        if mask == None: pass
+        else: sample = th.where(mask==0, x_start, sample)
 
         return {
             "sample": sample, 
@@ -613,6 +620,7 @@ class GaussianDiffusion:
         assert model_output.shape == target.shape == x_start.shape
         terms["mse"] = mean_flat((target - model_output) ** 2)
 
+        # replaced conditional?
         model_out_x_start = self._x0_helper(model_output, x_t, t)['pred_xstart'] # predicted_xstart = model_output
         t0_mask = (t == 0)
         t0_loss = mean_flat((x_start_mean - model_out_x_start) ** 2)

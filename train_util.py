@@ -51,6 +51,7 @@ class TrainLoop:
         eval_data=None,
         eval_interval=-1,
         pad_emb=None,
+        pad_token=0,
         cf_ratio=0.15
     ):
         self.model = model
@@ -80,6 +81,7 @@ class TrainLoop:
         self.resume_step = 0
         self.global_batch = self.batch_size * dist.get_world_size()
         self.pad_emb = pad_emb
+        self.pad_token = pad_token
         self.cf_ratio = cf_ratio
 
         self.model_params = list(self.model.parameters())
@@ -181,17 +183,6 @@ class TrainLoop:
             or self.step + self.resume_step < self.learning_steps
         ):
             batch, cond = next(self.data)
-
-            # unconditional training
-            # batch is data, cond is: dict, keys = [inputs ids, input mask]
-            if np.random.rand() < self.cf_ratio:
-                # reshape
-                emb = self.pad_emb.view(1,1,-1).expand(batch.shape).to(dist_util.dev())
-                cnd = cond['input_mask'].unsqueeze(dim=-1).expand(batch.shape).to(dist_util.dev())
-                batch = batch.to(dist_util.dev())
-
-                batch = th.where(cnd == 0, batch, emb)
-
             self.run_step(batch, cond)
 
             # saving and eval-type operations
@@ -260,6 +251,24 @@ class TrainLoop:
             }
             last_batch = (i + self.microbatch) >= batch.shape[0]
             t, weights = self.schedule_sampler.sample(micro.shape[0], dist_util.dev())
+
+            # unconditional modelling here
+            # batch is data, cond is: dict, keys = [inputs ids, input mask]
+            if np.random.rand() < self.cf_ratio:
+                # updated embeddings
+                emb = self.pad_emb.view(1,1,-1).expand(micro.shape).to(dist_util.dev())
+                cnd = micro_cond['input_mask'].unsqueeze(dim=-1).expand(micro.shape).to(dist_util.dev())
+                micro = micro.to(dist_util.dev())
+
+                batch = th.where(cnd == 0, emb, micro)
+                # toxic - 0, followd by detox - 1
+
+                # update tokens
+                micro_cond['input_ids'] = micro_cond['input_ids'].to(dist_util.dev())
+                pad = self.pad_token * th.ones_like(micro_cond['input_ids']).to(dist_util.dev())
+                cnd = micro_cond['input_mask'].to(dist_util.dev())
+
+                micro_cond['input_ids'] = th.where(cnd == 0, self.pad_token, micro_cond['input_ids'])
 
             # print(micro_cond.keys())
             compute_losses = functools.partial(

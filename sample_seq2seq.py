@@ -117,14 +117,20 @@ def main():
     for cond in tqdm(all_test_data):
         input_ids_x = cond.pop('input_ids').to(dist_util.dev())
         x_start = model.get_embeds(input_ids_x)
+
         input_ids_mask = cond.pop('input_mask')
         input_ids_mask_ori = input_ids_mask
 
+        # noise, then conditional data
         noise = th.randn_like(x_start)
         input_ids_mask = th.broadcast_to(input_ids_mask.unsqueeze(dim=-1), x_start.shape).to(dist_util.dev())
         x_noised = th.where(input_ids_mask==0, x_start, noise)
 
+        # make unconditional noised data
+        #print(5*'\n', x_start.shape)
+
         model_kwargs = {}
+        # default to true
         if args.step == args.diffusion_steps:
             args.use_ddim = False
             step_gap = 1
