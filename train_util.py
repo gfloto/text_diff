@@ -254,13 +254,14 @@ class TrainLoop:
 
             # unconditional modelling here
             # batch is data, cond is: dict, keys = [inputs ids, input mask]
-            if np.random.rand() < self.cf_ratio:
+            if np.random.rand() < self.cf_ratio*10:
+                pass
                 # updated embeddings
                 emb = self.pad_emb.view(1,1,-1).expand(micro.shape).to(dist_util.dev())
                 cnd = micro_cond['input_mask'].unsqueeze(dim=-1).expand(micro.shape).to(dist_util.dev())
                 micro = micro.to(dist_util.dev())
 
-                batch = th.where(cnd == 0, emb, micro)
+                micro = th.where(cnd == 0, emb, micro)
                 # toxic - 0, followd by detox - 1
 
                 # update tokens
@@ -270,7 +271,6 @@ class TrainLoop:
 
                 micro_cond['input_ids'] = th.where(cnd == 0, self.pad_token, micro_cond['input_ids'])
 
-            # print(micro_cond.keys())
             compute_losses = functools.partial(
                 self.diffusion.training_losses,
                 self.ddp_model,

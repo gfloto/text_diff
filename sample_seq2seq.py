@@ -142,6 +142,7 @@ def main():
             diffusion.p_sample_loop if not args.use_ddim else diffusion.ddim_sample_loop
         )
 
+        cf_w = 3
         sample_shape = (x_start.shape[0], args.seq_len, args.hidden_dim)
 
         samples = sample_fn(
@@ -156,7 +157,8 @@ def main():
             clamp_first=True,
             mask=input_ids_mask,
             x_start=x_start,
-            gap=step_gap
+            gap=step_gap,
+            cf_w=cf_w
         )
 
         model_emb_copy.cpu()
