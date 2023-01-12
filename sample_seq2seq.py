@@ -26,7 +26,7 @@ from basic_utils import (
 
 def create_argparser():
     defaults = dict(model_path='', step=0, out_dir='', top_p=0)
-    decode_defaults = dict(split='valid', clamp_step=0, seed2=105, clip_denoised=False)
+    decode_defaults = dict(split='valid', clamp_step=0, seed2=105, clip_denoised=False, cf_w=0.0, cf_type='default')
     defaults.update(load_defaults_config())
     defaults.update(decode_defaults)
     parser = argparse.ArgumentParser()
@@ -42,7 +42,6 @@ def main():
 
     # load configurations.
     config_path = os.path.join(os.path.split(args.model_path)[0], "training_args.json")
-    print(config_path)
     # sys.setdefaultencoding('utf-8')
     with open(config_path, 'rb', ) as f:
         training_args = json.load(f)
@@ -93,7 +92,8 @@ def main():
     # print(batch.shape)
 
     model_base_name = os.path.basename(os.path.split(args.model_path)[0]) + f'.{os.path.split(args.model_path)[1]}'
-    out_dir = os.path.join(args.out_dir, f"{model_base_name.split('.ema')[0]}")
+    out_dir = os.path.join(args.out_dir, f"{model_base_name.split('.ema')[0]}_{args.cf_type}_{args.cf_w:.1f}")
+    print(out_dir)
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
 
@@ -142,7 +142,6 @@ def main():
             diffusion.p_sample_loop if not args.use_ddim else diffusion.ddim_sample_loop
         )
 
-        cf_w = 3
         sample_shape = (x_start.shape[0], args.seq_len, args.hidden_dim)
 
         samples = sample_fn(
@@ -158,7 +157,8 @@ def main():
             mask=input_ids_mask,
             x_start=x_start,
             gap=step_gap,
-            cf_w=cf_w
+            cf_w=args.cf_w,
+            cf_type=args.cf_type
         )
 
         model_emb_copy.cpu()

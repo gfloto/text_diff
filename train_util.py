@@ -254,7 +254,7 @@ class TrainLoop:
 
             # unconditional modelling here
             # batch is data, cond is: dict, keys = [inputs ids, input mask]
-            if np.random.rand() < self.cf_ratio*10:
+            if np.random.rand() < self.cf_ratio:
                 pass
                 # updated embeddings
                 emb = self.pad_emb.view(1,1,-1).expand(micro.shape).to(dist_util.dev())
