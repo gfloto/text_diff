@@ -347,7 +347,7 @@ class GaussianDiffusion:
 
     def p_sample(
         self, model, x, t, clip_denoised=True, denoised_fn=None, model_kwargs=None,
-            top_p=None, mask=None, x_start=None,
+            top_p=None, mask=None, x_start=None, pad_token=0, cf_w=0, cf_type='default'
     ):
         """
         Sample x_{t-1} from the model at the given timestep.
@@ -376,6 +376,19 @@ class GaussianDiffusion:
         )
 
         # classifier free output
+        # remove conditioning
+        pad_emb = model.get_embeds(th.tensor(pad_token).long().to(x.device))
+        emb = pad_emb.view(1,1,-1).expand(x.shape)
+        x = th.where(mask == 0, emb, x)
+
+        out_unc = self.p_mean_variance(
+            model,
+            x,
+            t,
+            clip_denoised=clip_denoised,
+            denoised_fn=denoised_fn,
+            model_kwargs=model_kwargs,
+        )
 
         if top_p is not None and top_p > 0:
             # print('top_p sampling')
@@ -394,7 +407,13 @@ class GaussianDiffusion:
             (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
         )  # no noise when t == 0
 
-        sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
+        # classifier free based sampling
+        if cf_type == 'default':
+            m = (1 + cf_w) * out['mean'] - cf_w * out_unc['mean']
+        elif cf_type == 'mean':
+            m = (1 - cf_w) * out['mean'] + cf_w * out_unc['mean']
+        else: raise ValueError
+        sample = m + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
 
         # re-condition
         if mask == None: pass
@@ -424,6 +443,8 @@ class GaussianDiffusion:
         mask=None,
         x_start=None,
         gap=1,
+        cf_w=0,
+        cf_type='default'
     ):
         """
         Generate samples from the model.
@@ -459,7 +480,9 @@ class GaussianDiffusion:
             clamp_step=clamp_step,
             clamp_first=clamp_first,
             mask=mask,
-            x_start=x_start
+            x_start=x_start,
+            cf_w=cf_w,
+            cf_type=cf_type
         ):
             final.append(sample['sample'])
         return final
@@ -479,6 +502,8 @@ class GaussianDiffusion:
         clamp_first=None,
         mask=None,
         x_start=None,
+        cf_w=0,
+        cf_type='default'
     ):
         """
         Generate samples from the model and yield intermediate samples from
@@ -525,7 +550,9 @@ class GaussianDiffusion:
                     model_kwargs=model_kwargs,
                     top_p=top_p,
                     mask=mask,
-                    x_start=x_start
+                    x_start=x_start,
+                    cf_w=cf_w,
+                    cf_type=cf_type
                 )
                 yield out
                 sample_x = out["sample"]
