@@ -632,8 +632,6 @@ class GaussianDiffusion:
                                    th.tensor([0]).to(x_start_mean.device),
                                    x_start_mean.shape)
 
-        # print(std.shape, )
-        # x_start_log_var = 2 * th.log(std)
         x_start = self._get_x_start(x_start_mean, std)
         if noise is None:
             noise = th.randn_like(x_start)

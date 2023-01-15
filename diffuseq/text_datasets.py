@@ -94,6 +94,7 @@ def helper_tokenize(sentence_lst, vocab_dict, seq_len):
             src = group_lst['input_id_x'][i][:-1]
             trg = group_lst['input_id_y'][i][:-1]
 
+            # if seqs are longer than max seq _len
             while len(src) + len(trg) > seq_len - 3:
                 if len(src)>len(trg):
                     src.pop()
@@ -147,10 +148,13 @@ def helper_tokenize(sentence_lst, vocab_dict, seq_len):
 def get_corpus(data_args, seq_len, split='train', loaded_vocab=None):
     print('#'*30, '\nLoading dataset {} from {}...'.format(data_args.dataset, data_args.data_dir))
 
+    path2 = None
     sentence_lst = {'src':[], 'trg': []}
+    print(split)
     if split == 'train':
         print('### Loading form the TRAIN set...')
         path = f'{data_args.data_dir}/train.jsonl'
+        path2 = f'{data_args.data_dir}/train_cola.jsonl'
     elif split == 'valid':
         print('### Loading form the VALID set...')
         path = f'{data_args.data_dir}/valid.jsonl'
@@ -164,16 +168,20 @@ def get_corpus(data_args, seq_len, split='train', loaded_vocab=None):
         for row in f_reader:
             sentence_lst['src'].append(json.loads(row)['src'].strip())
             sentence_lst['trg'].append(json.loads(row)['trg'].strip())
-    # sentence_lst: dict with src and tgt mapping to list of corresponding strings
 
+    if path2 is not None:
+        with open(path2, 'r') as f_reader:
+            for row in f_reader:
+                sentence_lst['src'].append(json.loads(row)['src'].strip())
+                sentence_lst['trg'].append(json.loads(row)['trg'].strip())
+
+    # sentence_lst: dict with src and tgt mapping to list of corresponding strings
     print('### Data samples...\n', sentence_lst['src'][:2], sentence_lst['trg'][:2])
         
     # get tokenizer.
     vocab_dict = loaded_vocab
-
     train_dataset = helper_tokenize(sentence_lst, vocab_dict, seq_len)
     return train_dataset
-
 
 class TextDataset(Dataset):
     def __init__(self, text_datasets, data_args, model_emb=None):

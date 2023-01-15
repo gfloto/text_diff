@@ -2,6 +2,7 @@ import copy
 import functools
 import os
 import sys
+import time
 
 import blobfile as bf
 import numpy as np
@@ -52,7 +53,7 @@ class TrainLoop:
         eval_interval=-1,
         pad_emb=None,
         pad_token=0,
-        cf_ratio=0.15
+        cf_ratio=0.2
     ):
         self.model = model
         self.diffusion = diffusion
@@ -244,6 +245,7 @@ class TrainLoop:
     def forward_backward(self, batch, cond):
         zero_grad(self.model_params)
         for i in range(0, batch.shape[0], self.microbatch):
+            print(i)
             micro = batch[i : i + self.microbatch].to(dist_util.dev())
             micro_cond = {
                 k: v[i : i + self.microbatch].to(dist_util.dev())
@@ -252,23 +254,67 @@ class TrainLoop:
             last_batch = (i + self.microbatch) >= batch.shape[0]
             t, weights = self.schedule_sampler.sample(micro.shape[0], dist_util.dev())
 
-            # unconditional modelling here
             # batch is data, cond is: dict, keys = [inputs ids, input mask]
             if np.random.rand() < self.cf_ratio:
+                #print(micro_cond['input_ids'][0])
+                #print(micro_cond['input_mask'][0])
+                #print(micro[0,:,0])
+                #print()
+
                 # updated embeddings
                 emb = self.pad_emb.view(1,1,-1).expand(micro.shape).to(dist_util.dev())
                 cnd = micro_cond['input_mask'].unsqueeze(dim=-1).expand(micro.shape).to(dist_util.dev())
                 micro = micro.to(dist_util.dev())
-
                 micro = th.where(cnd == 0, emb, micro)
-                # toxic - 0, followd by detox - 1
-
+               
                 # update tokens
                 micro_cond['input_ids'] = micro_cond['input_ids'].to(dist_util.dev())
                 pad = self.pad_token * th.ones_like(micro_cond['input_ids']).to(dist_util.dev())
                 cnd = micro_cond['input_mask'].to(dist_util.dev())
-
                 micro_cond['input_ids'] = th.where(cnd == 0, self.pad_token, micro_cond['input_ids'])
+               
+                start = micro_cond['input_mask'].argmax(dim=1)
+                for i in range(micro.shape[0]):
+                    ind = start[i].item()
+                    micro[i] = th.cat((micro[i, ind:], micro[i, :ind]))
+                    micro_cond['input_ids'][i] = th.cat((micro_cond['input_ids'][i, ind:], micro_cond['input_ids'][i, :ind]))
+                micro_cond['input_mask'] = th.ones_like(micro_cond['input_mask'])
+
+                print(micro_cond['input_ids'][0])
+                print(micro_cond['input_mask'][0])
+                print(micro[0,:,0])
+
+            # check for uncond samples
+            else:
+                for j in range(micro.shape[0]):
+                    if micro_cond['input_ids'][j,1] == 102:
+                        #print('hit')
+                        #print(micro_cond['input_ids'][j])
+                        #print(micro_cond['input_mask'][j])
+                        #print(micro[0,:,0])
+                        #print()
+
+                        # updated embeddings
+                        emb = self.pad_emb.view(1,-1).expand(micro[j].shape).to(dist_util.dev())
+                        cnd = micro_cond['input_mask'][j].unsqueeze(dim=-1).expand(micro[j].shape).to(dist_util.dev())
+                        micro = micro.to(dist_util.dev())
+                        micro[j] = th.where(cnd == 0, emb, micro[j])
+
+                        # update tokens
+                        micro_cond['input_ids'] = micro_cond['input_ids'].to(dist_util.dev())
+                        pad = self.pad_token * th.ones_like(micro_cond['input_ids'][j]).to(dist_util.dev())
+                        cnd = micro_cond['input_mask'][j].to(dist_util.dev())
+                        micro_cond['input_ids'][j] = th.where(cnd == 0, self.pad_token, micro_cond['input_ids'][j])
+
+                        # move tokens to back
+                        micro[j] = th.cat((micro[j, 3:], micro[j, :3]))
+                        micro_cond['input_ids'][j] = th.cat((micro_cond['input_ids'][j, 3:], micro_cond['input_ids'][j, :3]))
+                        micro_cond['input_mask'][j] = th.ones_like(micro_cond['input_mask'][j])
+
+                        #print(micro_cond['input_ids'][j])
+                        #print(micro_cond['input_mask'][j])
+                        #print(micro[j,:,0])
+                        #print()
 
             compute_losses = functools.partial(
                 self.diffusion.training_losses,
