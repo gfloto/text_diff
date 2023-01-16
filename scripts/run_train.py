@@ -1,22 +1,18 @@
-import sys
-import os
-import argparse
-import time
+import os, sys, time, argparse 
 sys.path.append('.')
 
+# TODO: update this for pre-emption
 # check if args.name has been used
 def ckpth(f, path):
     # path = f_006 for example
-    print(f, path)
     if f in path: print('path')
-    print(len(path), len(f))
-    print()
     return f in path and len(path) == len(f) + 4 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='training args.')
     parser.add_argument('--name', type=str, default='dev', help='name of experiment folder')
     parser.add_argument('--dataset', type=str, default='', help='name of training dataset')
+    parser.add_argument('--dataset_unsup', type=str, default='None', help='name on unsup dataset')
     parser.add_argument('--data_dir', type=str, default='', help='path to training dataset')
 
     parser.add_argument('--noise_schedule', type=str, default='cosine', choices=['linear', 'cosine', 'sqrt', 'trunc_cos', 'trunc_lin', 'pw_lin'], help='the distribution of noises')
@@ -47,14 +43,15 @@ if __name__ == '__main__':
     # set working dir to the upper folder
     abspath = os.path.abspath(sys.argv[0])
     dname = os.path.dirname(abspath)
-    dname = os.path.dirname(dname)
-    os.chdir(dname)
+    dname = os.path.dirname(dname) # calling this twice is ugly
+    os.chdir(dname) # this is very useful!!
 
+    # TODO: this is unclear to me still
     if int(os.environ['LOCAL_RANK']) == 0:
         if not os.path.isdir(args.folder_name):
             os.mkdir(args.folder_name)
 
-    # check if experiment has ran already
+    # check if experiment has ran already, update path to reflect
     if os.path.exists(os.path.join(args.folder_name, args.name + '_000')):
         exps = [e for e in os.listdir(args.folder_name) if ckpth(args.name, e)]
         n = len(exps)
@@ -70,7 +67,7 @@ if __name__ == '__main__':
                   f"python train.py   " \
                   f"--checkpoint_path {args.name} " \
                   f"--dataset {args.dataset} --data_dir {args.data_dir} --vocab {args.vocab} --use_plm_init {args.use_plm_init} " \
-                  f"--lr {args.lr} " \
+                  f"--lr {args.lr} --dataset_unsup {args.dataset_unsup} " \
                   f"--batch_size {args.bsz} --microbatch {args.microbatch} " \
                   f"--diffusion_steps {args.diff_steps} " \
                   f"--noise_schedule {args.noise_schedule} " \
