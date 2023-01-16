@@ -53,11 +53,13 @@ class TrainLoop:
         eval_interval=-1,
         pad_emb=None,
         pad_token=0,
-        cf_ratio=0.2
+        cf_ratio=0.1,
+        data_unsup=None
     ):
         self.model = model
         self.diffusion = diffusion
         self.data = data
+        self.data_unsup = data_unsup
         self.eval_data = eval_data
         self.batch_size = batch_size
         self.microbatch = microbatch if microbatch > 0 else batch_size
@@ -184,7 +186,9 @@ class TrainLoop:
             or self.step + self.resume_step < self.learning_steps
         ):
             batch, cond = next(self.data)
-            self.run_step(batch, cond)
+            if self.data_unsup is not None: batch_unsup, cond_unsup = next(self.data_unsup)
+            else: batch_unsup = None; cond_unsup = None;
+            self.run_step(batch, batch_unsup, cond, cond_unsup)
 
             # saving and eval-type operations
             if self.step % self.log_interval == 0:
@@ -204,8 +208,12 @@ class TrainLoop:
         if (self.step - 1) % self.save_interval != 0:
             self.save()
 
-    def run_step(self, batch, cond):
-        self.forward_backward(batch, cond)
+    def run_step(self, batch, batch_unsup, cond, cond_unsup):
+        if np.random.rand() < self.cf_ratio and batch_unsup is not None:    
+            self.forward_backward(batch_unsup, cond_unsup, unsup=True)
+        else:
+            self.forward_backward(batch, cond)
+
         if self.use_fp16:
             self.optimize_fp16()
         else:
@@ -242,10 +250,9 @@ class TrainLoop:
                     self.diffusion, t, {f"eval_{k}": v * weights for k, v in losses.items()}
                 )
 
-    def forward_backward(self, batch, cond):
+    def forward_backward(self, batch, cond, unsup=False):
         zero_grad(self.model_params)
         for i in range(0, batch.shape[0], self.microbatch):
-            print(i)
             micro = batch[i : i + self.microbatch].to(dist_util.dev())
             micro_cond = {
                 k: v[i : i + self.microbatch].to(dist_util.dev())
@@ -255,7 +262,8 @@ class TrainLoop:
             t, weights = self.schedule_sampler.sample(micro.shape[0], dist_util.dev())
 
             # batch is data, cond is: dict, keys = [inputs ids, input mask]
-            if np.random.rand() < self.cf_ratio:
+            if np.random.rand() < self.cf_ratio and not unsup:
+                #print('normal')
                 #print(micro_cond['input_ids'][0])
                 #print(micro_cond['input_mask'][0])
                 #print(micro[0,:,0])
@@ -280,19 +288,21 @@ class TrainLoop:
                     micro_cond['input_ids'][i] = th.cat((micro_cond['input_ids'][i, ind:], micro_cond['input_ids'][i, :ind]))
                 micro_cond['input_mask'] = th.ones_like(micro_cond['input_mask'])
 
-                print(micro_cond['input_ids'][0])
-                print(micro_cond['input_mask'][0])
-                print(micro[0,:,0])
+                #print(micro_cond['input_ids'][0])
+                #print(micro_cond['input_mask'][0])
+                #print(micro[0,:,0])
+                #print('\n\n')
 
             # check for uncond samples
-            else:
+            if unsup:
                 for j in range(micro.shape[0]):
                     if micro_cond['input_ids'][j,1] == 102:
-                        #print('hit')
-                        #print(micro_cond['input_ids'][j])
-                        #print(micro_cond['input_mask'][j])
-                        #print(micro[0,:,0])
-                        #print()
+                        #if j == 0:
+                            #print('unsup')
+                            #print(micro_cond['input_ids'][j])
+                            #print(micro_cond['input_mask'][j])
+                            #print(micro[0,:,0])
+                            #print()
 
                         # updated embeddings
                         emb = self.pad_emb.view(1,-1).expand(micro[j].shape).to(dist_util.dev())
@@ -311,10 +321,11 @@ class TrainLoop:
                         micro_cond['input_ids'][j] = th.cat((micro_cond['input_ids'][j, 3:], micro_cond['input_ids'][j, :3]))
                         micro_cond['input_mask'][j] = th.ones_like(micro_cond['input_mask'][j])
 
-                        #print(micro_cond['input_ids'][j])
-                        #print(micro_cond['input_mask'][j])
-                        #print(micro[j,:,0])
-                        #print()
+                        #if j == 0:
+                            #print(micro_cond['input_ids'][j])
+                            #print(micro_cond['input_mask'][j])
+                            #print(micro[j,:,0])
+                            #print('\n\n')
 
             compute_losses = functools.partial(
                 self.diffusion.training_losses,

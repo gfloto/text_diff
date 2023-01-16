@@ -15,6 +15,7 @@ def load_data_text(
     split='train', 
     loaded_vocab=None,
     loop=True,
+    dataset='detox'
 ):
     """
     For a dataset, create a generator over (seqs, kwargs) pairs.
@@ -34,7 +35,7 @@ def load_data_text(
 
     print('#'*30, '\nLoading text data...')
 
-    training_data = get_corpus(data_args, seq_len, split=split, loaded_vocab=loaded_vocab)
+    training_data = get_corpus(data_args, dataset, seq_len, split=split, loaded_vocab=loaded_vocab)
 
     dataset = TextDataset(
         training_data,
@@ -145,22 +146,20 @@ def helper_tokenize(sentence_lst, vocab_dict, seq_len):
     return raw_datasets
 
 
-def get_corpus(data_args, seq_len, split='train', loaded_vocab=None):
+def get_corpus(data_args, dataset, seq_len, split='train', loaded_vocab=None):
     print('#'*30, '\nLoading dataset {} from {}...'.format(data_args.dataset, data_args.data_dir))
 
-    path2 = None
     sentence_lst = {'src':[], 'trg': []}
     print(split)
     if split == 'train':
         print('### Loading form the TRAIN set...')
-        path = f'{data_args.data_dir}/train.jsonl'
-        path2 = f'{data_args.data_dir}/train_cola.jsonl'
+        path = f'{data_args.data_dir}/{dataset}_train.jsonl'
     elif split == 'valid':
         print('### Loading form the VALID set...')
-        path = f'{data_args.data_dir}/valid.jsonl'
+        path = f'{data_args.data_dir}/{dataset}_valid.jsonl'
     elif split == 'test':
         print('### Loading form the TEST set...')
-        path = f'{data_args.data_dir}/test.jsonl'
+        path = f'{data_args.data_dir}/{dataset}_test.jsonl'
     else:
         assert False, "invalid split for dataset"
 
@@ -168,12 +167,6 @@ def get_corpus(data_args, seq_len, split='train', loaded_vocab=None):
         for row in f_reader:
             sentence_lst['src'].append(json.loads(row)['src'].strip())
             sentence_lst['trg'].append(json.loads(row)['trg'].strip())
-
-    if path2 is not None:
-        with open(path2, 'r') as f_reader:
-            for row in f_reader:
-                sentence_lst['src'].append(json.loads(row)['src'].strip())
-                sentence_lst['trg'].append(json.loads(row)['trg'].strip())
 
     # sentence_lst: dict with src and tgt mapping to list of corresponding strings
     print('### Data samples...\n', sentence_lst['src'][:2], sentence_lst['trg'][:2])

@@ -27,6 +27,7 @@ def create_argparser():
 
 def main():
     args = create_argparser().parse_args()
+    if args.dataset_unsup == 'None': args.dataset_unsup = None
 
     # setting seed is cursed, I muse talk to giga coder to explain this madness
     # (even worse than batch-norm)
@@ -45,7 +46,17 @@ def main():
         loaded_vocab=tokenizer,
         model_emb=model_weight # use model's weights as init
     )
-    next(data)
+
+    if args.dataset_unsup is not None:
+        data_unsup = load_data_text(
+            batch_size=args.batch_size,
+            seq_len=args.seq_len,
+            data_args = args,
+            loaded_vocab=tokenizer,
+            model_emb=model_weight, # use model's weights as init
+            dataset=args.dataset_unsup
+        )
+    else: data_unsup = None
 
     # list of 1) data tensor of : bzn, seq_len, token size
     # 2) dict of "input_ids" and "input_mask" (bzn, token size)
@@ -99,6 +110,7 @@ def main():
         model=model,
         diffusion=diffusion,
         data=data,
+        data_unsup=data_unsup,
         batch_size=args.batch_size,
         microbatch=args.microbatch,
         lr=args.lr,
