@@ -381,6 +381,12 @@ class GaussianDiffusion:
         emb = pad_emb.view(1,1,-1).expand(x.shape)
         x = th.where(mask == 0, emb, x)
 
+        # shift to begin with conditional
+        start = mask.argmax(dim=1)
+        for i in range(x.shape[0]):
+            ind = start[i].item()
+            x[i] = th.cat((x[i, ind:], x[i, :ind]))
+
         out_unc = self.p_mean_variance(
             model,
             x,
