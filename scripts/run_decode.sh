@@ -1,4 +1,6 @@
 python -u run_decode.py \
---model_dir /home/griffin/python/d3m/text_diff/results/pretrained_run \
+--model_dir 'model_save_location' \
+--cf_w 5 \
+--cf_type default \
 --seed 124 \
 --split test

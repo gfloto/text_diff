@@ -1,5 +1,3 @@
-
-
 from detox_experiment import fewshot_experiment,zeroshot_experiment,eval_json
 
 seed =100

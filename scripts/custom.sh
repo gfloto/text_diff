@@ -6,19 +6,18 @@
 #SBATCH --mem-per-gpu=24G
 #SBATCH --time=01-00:00:00
 #SBATCH --cpus-per-task=16
+nvidia-smi
+export OMP_NUM_THREADS=16
 
 source /home/gfloto/env_store/diff_env/bin/activate
 cd /home/gfloto/projects/def-ssanner/gfloto/projects/diffuseq/scripts
 
 module load gcc/9.3.0 arrow cuda/11
 
-python -m torch.distributed.launch \
---nproc_per_node=4 \
---master_port=12233 \
---use_env run_train.py \
---data_dir /home/gfloto/projects/def-ssanner/gfloto/projects/diffuseq/datasets/detox \
+torchrun --nproc_per_node=4 run_train.py \
+--data_dir /home/gfloto/scratch/datasets/detox \
 --folder_name /home/gfloto/scratch/diffusion_models \
---resume_checkpoint /home/gfloto/scratch/diffusion_models/check_models/qqp_model000999.pt \
+--resume_checkpoint /home/gfloto/scratch/diffusion_models/qqp/model000999.pt \
 --diff_steps 2000 \
 --lr 0.0001 \
 --learning_steps 100000 \

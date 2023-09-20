@@ -138,6 +138,9 @@ class TransformerNetModel(nn.Module):
             emb_x = self.input_up_proj(x)
         else:
             emb_x = x
+        print(emb_x.shape, emb_t.shape)
+        import sys
+        sys.exit()
 
         seq_length = x.size(1)
         position_ids = self.position_ids[:, : seq_length ]

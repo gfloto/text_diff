@@ -167,7 +167,7 @@ def natural_key(string_):
 
 if __name__ == '__main__':
     #p = ['results/cf_000_mean_0.0', 'results/cf_000_mean_0.3', 'results/cf_000_mean_1.0']
-    p = ['results/cf_000_default_2.0', 'results/cf_000_default_3.0']
+    p = ['results/wiki']#, 'results/cf_000_default_5.0']
     for path in p:
         folders = os.listdir(path)
         folders = sorted(folders, key=natural_key)

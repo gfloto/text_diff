@@ -74,6 +74,7 @@ def load_model_emb(args, tokenizer):
     path_save = '{}/random_emb.torch'.format(args.checkpoint_path)
     path_save_ind = path_save + ".done"
     if int(os.environ['LOCAL_RANK']) == 0:
+        print('hit 1')
         if os.path.exists(path_save):
             print('reload the random embeddings', model)
             model.load_state_dict(torch.load(path_save))
@@ -85,6 +86,7 @@ def load_model_emb(args, tokenizer):
             with open(path_save_ind, "x") as _:
                 pass
     else:
+        print('hit 2')
         while not os.path.exists(path_save_ind):
             time.sleep(1)
         print('reload the random embeddings', model)
